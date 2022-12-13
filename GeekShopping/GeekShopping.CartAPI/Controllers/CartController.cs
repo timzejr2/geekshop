@@ -1,5 +1,8 @@
 using GeekShopping.CartAPI.Data.ValueObjects;
+using GeekShopping.CartAPI.Messages;
+using GeekShopping.CartAPI.RabbitMQSender;
 using GeekShopping.CartAPI.Repository;
+using GeekShopping.CartAPI.ValueObjects;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GeekShopping.CartAPI.Controllers
@@ -9,10 +12,14 @@ namespace GeekShopping.CartAPI.Controllers
     public class CartController : ControllerBase
     {
         private ICartRepository _cartRepository;
+        private ICouponRepository _couponRepository;
+        private IRabbitMQMessageSender _rabbitMQMessageSender;
 
-        public CartController(ICartRepository cartRepository)
+        public CartController(ICartRepository cartRepository, ICouponRepository couponRepository, IRabbitMQMessageSender rabbitMQMessageSender)
         {
             _cartRepository = cartRepository ?? throw new ArgumentNullException(nameof(cartRepository));
+            _couponRepository = couponRepository ?? throw new ArgumentNullException(nameof(couponRepository));
+            _rabbitMQMessageSender = rabbitMQMessageSender ?? throw new ArgumentNullException(nameof(rabbitMQMessageSender));
         }
 
         [HttpGet("find-cart/{id}")]
@@ -58,6 +65,51 @@ namespace GeekShopping.CartAPI.Controllers
                 return BadRequest();
 
             return Ok(status);
+        }
+
+        [HttpPost("apply-coupon")]
+        public async Task<ActionResult<CartVO>> ApplyCoupon(CartVO vo)
+        {
+            var status = await _cartRepository.ApplyCoupon(vo.CartHeader.UserId, vo.CartHeader.CouponCode);
+
+            if (!status)
+                return NotFound();
+
+            return Ok(status);
+        }
+
+        [HttpDelete("remove-coupon/{userId}")]
+        public async Task<ActionResult<CartVO>> RemoveCoupon(string userId)
+        {
+            var status = await _cartRepository.RemoveCoupon(userId);
+
+            if (!status)
+                return NotFound();
+
+            return Ok(status);
+        }
+
+        [HttpPost("checkout")]
+        public async Task<ActionResult<CheckoutHeaderVO>> Checkout(CheckoutHeaderVO vo)
+        {
+            if (vo?.UserId == null) return BadRequest();
+            var cart = await _cartRepository.FindCartByUserId(vo.UserId);
+            if (cart == null) return NotFound();
+            if (!string.IsNullOrEmpty(vo.CouponCode))
+            {
+                string token = Request.Headers["Authorization"];
+                CouponVO coupon = await _couponRepository.GetCouponByCouponCode(vo.CouponCode, token);
+
+                if (vo.DiscountTotal != coupon.DiscountAmount)
+                    return StatusCode(412);
+            }
+            vo.CartDetails = cart.CartDetails;
+            vo.DateTime = DateTime.Now;
+
+            // RabbitMQ logic comes here!!!
+            _rabbitMQMessageSender.SendMessage(vo, "checkoutqueue");
+
+            return Ok(vo);
         }
     }
 }
