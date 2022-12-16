@@ -8,10 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.10" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="6.0.10">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.10">
       <PrivateAssets>all</PrivateAssets>
@@ -26,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GeekShopping.MessageBus\GeekShopping.MessageBus.csproj" />
+    <ProjectReference Include="..\GeekShopping.PaymentProcessor\GeekShopping.PaymentProcessor.csproj" />
   </ItemGroup>
 
   <ItemGroup>

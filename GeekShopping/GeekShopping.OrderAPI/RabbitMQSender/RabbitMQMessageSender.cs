@@ -1,10 +1,10 @@
-﻿using GeekShopping.CartAPI.Messages;
+﻿using GeekShopping.MessageBus;
+using GeekShopping.OrderAPI.Messages;
 using RabbitMQ.Client;
-using System.Text.Json;
 using System.Text;
-using GeekShopping.MessageBus;
+using System.Text.Json;
 
-namespace GeekShopping.CartAPI.RabbitMQSender
+namespace GeekShopping.OrderAPI.RabbitMQSender
 {
     public class RabbitMQMessageSender : IRabbitMQMessageSender
     {
@@ -15,32 +15,39 @@ namespace GeekShopping.CartAPI.RabbitMQSender
 
         public RabbitMQMessageSender()
         {
-            _hostName = "host.docker.internal";
+            _hostName = "localhost";
             _password = "guest";
             _userName = "guest";
         }
 
-        public void SendMessage(BaseMessage message, string queueName)
+        public void SendMessage(BaseMessage baseMessage, string queueName)
         {
-            if (ConnectionExists())
+            try
             {
-                using var channel = _connection.CreateModel();
-                channel.QueueDeclare(queue: queueName, false, false, false, arguments: null);
-                byte[] body = GetMessageAsByteArray(message);
-                channel.BasicPublish(exchange: "", routingKey: queueName, basicProperties: null, body: body);
+                if (ConnectionExists())
+                {
+                    using var channel = _connection.CreateModel();
+                    channel.QueueDeclare(queue: queueName, false, false, false, arguments: null);
+                    byte[] body = GetMessageAsByteArray(baseMessage);
+                    channel.BasicPublish(
+                        exchange: "", routingKey: queueName, basicProperties: null, body: body);
+                }
             }
-                
+            catch (Exception ex)
+            {
+                throw ex;
+            }
         }
 
-        private byte[] GetMessageAsByteArray(BaseMessage message)
+        private byte[] GetMessageAsByteArray(BaseMessage baseMessage)
         {
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
             };
-            var json = JsonSerializer.Serialize<CheckoutHeaderVO>((CheckoutHeaderVO)message, options);
-            var body = Encoding.UTF8.GetBytes(json);
-            return body;
+
+            var json = JsonSerializer.Serialize<PaymentVO>((PaymentVO)baseMessage, options);
+            return Encoding.UTF8.GetBytes(json);
         }
 
         private bool ConnectionExists()
@@ -58,8 +65,9 @@ namespace GeekShopping.CartAPI.RabbitMQSender
                 {
                     HostName = _hostName,
                     UserName = _userName,
-                    Password = _password
+                    Password = _password,
                 };
+
                 _connection = factory.CreateConnection();
             }
             catch (Exception)
